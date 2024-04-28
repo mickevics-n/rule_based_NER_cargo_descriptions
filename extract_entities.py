@@ -4,7 +4,7 @@ from scripts import word_to_num, add_commas, compose_packaging_pattern, extract_
     is_singular, is_hazardous, check_for_relevance, remove_singular_quantities, remove_plural_weights, \
     add_missing_weights
 
-from knowlage_base import cargo_items, packaging_plural
+from knowlege_base import cargo_items, packaging_plural
 
 from inputs import inputs
 

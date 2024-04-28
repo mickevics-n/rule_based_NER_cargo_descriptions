@@ -5,7 +5,7 @@ from nltk.corpus import wordnet
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import word_tokenize
 
-from knowlage_base import packaging_plural
+from knowlege_base import packaging_plural
 
 # Comment lines when downloaded
 nltk.download('wordnet')
