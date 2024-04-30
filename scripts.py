@@ -8,10 +8,9 @@ from nltk.tokenize import word_tokenize
 from knowlege_base import packaging_plural
 
 # Comment lines when downloaded
-nltk.download('wordnet')
-nltk.download('averaged_perceptron_tagger')
-nltk.download('punkt')
-
+#nltk.download('wordnet')
+#nltk.download('averaged_perceptron_tagger')
+#nltk.download('punkt')
 
 def compose_packaging_pattern(packaging_plural):
     """
@@ -179,7 +178,6 @@ def convert_to_kg(weight, unit):
     else:
         raise ValueError("Invalid unit. Unit matched different from 'kg', 'kilograms', 'tonnes', 'pounds', or 'grams'.")
 
-
 def extract_weight_in_kg(input_text):
     """
     Extracts weight measurements from a given input_text that describes cargo, and converts these weights into kilograms
@@ -205,11 +203,13 @@ def extract_weight_in_kg(input_text):
     weight_per_package = {package: [] for package in packaging_matches}
 
     sentences = re.split(r'(?<=[.!?]) +', input_text)
-
+    list_weights = []
+    list_units = []
     for sentence in sentences:
 
         for weight, unit in weights:
-
+            list_weights.append(weight)
+            list_units.append(unit)
             if weight in sentence:
                 for package in packaging_matches:
 
@@ -217,7 +217,7 @@ def extract_weight_in_kg(input_text):
 
                         weight_per_package[package].append(float(weight))
                         weight_per_package[package].append(unit)
-
+    print(weight_per_package)
     result = {}
 
     for package, weights in weight_per_package.items():
@@ -232,6 +232,12 @@ def extract_weight_in_kg(input_text):
         else:
             weight = "information missing"
             result[variable_name] = weight
+
+    unique_weights_list = list(set(list_weights))
+    unique_units_list = list(set(list_units))
+    if len(result) == 1 and (weight_per_package) and len(unique_weights_list) == 1 and len(unique_units_list) == 1:
+        weight = convert_to_kg(unique_weights_list[0], unique_units_list[0])
+        result[variable_name] = weight
 
     return result
 
@@ -306,8 +312,8 @@ def is_hazardous(sentence):
     hazardous_keywords = ['hazardous', 'hazard', 'dangerous', 'flammable', 'toxic', 'explosive']
 
     for word in hazardous_keywords:
-        if word in tokens:
 
+        if word in tokens:
             if negation_flag:
                 return False
             else:
@@ -445,6 +451,30 @@ def to_singular(word):
         'Pallets': 'Pallet',
         'pallet': 'pallet',
         'Pallet': 'Pallet',
+        'canisters': 'canister',
+        'Canisters': 'Canister',
+        'canister': 'canister',
+        'Canister': 'Canister',
+        'packs': 'pack',
+        'Packs': 'Pack',
+        'pack': 'pack',
+        'Pack': 'Pack',
+        'vials': 'vial',
+        'Vials': 'Vial',
+        'vial': 'vial',
+        'Vial': 'Vial',
+        'tubs': 'tub',
+        'Tubs': 'Tub',
+        'tub': 'tub',
+        'Tub': 'Tub',
+        'totes': 'tote',
+        'Totes': 'Tote',
+        'tote': 'tote',
+        'Tote': 'Tote',
+        'packets': 'packet',
+        'Packets': 'Packet',
+        'packet': 'packet',
+        'Packet': 'Packet',
     }
 
     # Check for exceptions
@@ -479,4 +509,38 @@ def add_missing_weights(entities):
             weight_key = f'weight_per_{singular_form}'
             if weight_key not in weight_info:
                 weight_info[weight_key] = 'information missing'
+    return entities
+
+
+def clean_entities_based_on_text(input_text, entities):
+    sentences = re.split(r'(?<=[.!?]) +', input_text)
+    keys_to_delete = []
+
+    for key, value in entities.items():
+        if '_contain' in key:  # Check if the key is a '{packaging}_contain' key
+            packaging = key.split('_contain')[0]  # Get the packaging type from the key
+            content_present = False
+
+            for sentence in sentences:
+                # Find all positions of the packaging and the content in the sentence
+                packaging_positions = [m.start() for m in re.finditer(packaging, sentence)]
+                content_position = sentence.find(str(value))
+
+                if len(packaging_positions) > 1:  # If there are multiple instances of packaging
+                    # Check if content is before the first packaging
+                    if content_position < packaging_positions[0] and content_position != -1:
+                        content_present = True
+                elif len(packaging_positions) == 1:  # Only one instance of packaging
+                    if packaging in sentence and str(value) in sentence:
+                        # Ensure content and packaging are in close proximity
+                        if abs(content_position - packaging_positions[0]) < len(sentence):
+                            content_present = True
+
+            if not content_present:
+                keys_to_delete.append(key)
+
+    # Delete the keys where the packaging and its content are not in the same sentence
+    for key in keys_to_delete:
+        del entities[key]
+
     return entities

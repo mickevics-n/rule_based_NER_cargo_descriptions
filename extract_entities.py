@@ -1,4 +1,7 @@
 import re
+import pandas as pd
+import xlsxwriter
+from datetime import datetime
 
 from scripts import word_to_num, add_commas, compose_packaging_pattern, extract_quantities, extract_weight_in_kg, \
     is_singular, is_hazardous, check_for_relevance, remove_singular_quantities, remove_plural_weights, \
@@ -7,6 +10,7 @@ from scripts import word_to_num, add_commas, compose_packaging_pattern, extract_
 from knowlege_base import cargo_items, packaging_plural
 
 from inputs import inputs
+
 
 def remove_duplicates(entities):
     """
@@ -94,7 +98,7 @@ def extract_entities(input_text):
     for quantity, packaging in zip(quantity_matches, packaging_matches):
 
         # Iterate over matches in the input text, to find additional context
-        for match in re.finditer(r'\b(?:with|containing|holding|contains|capacity)\b\s+(\d+)\s+(?:'
+        for match in re.finditer(r'\b(?:with|containing|holding|contains|capacity|hold)\b\s+(\d+)\s+(?:'
                                  + weight_units_pattern + r'\b)?\s*(' + '|'.join(packaging_matches) + r')?',
                                  input_text):
 
@@ -103,28 +107,26 @@ def extract_entities(input_text):
                 continue
 
             elif re.search(r'\b(\d+)\b', match.group(0)):
-                #print("weight_units_pattern not found... continue")
+                print("weight_units_pattern not found... continue")
                 phrase = match.group(0)
 
                 quantity_contents = re.search(r'\b(\d+)\b', phrase).group(0)
                 match = re.search(rf'\b{re.escape(quantity_contents)}\s+(\w+)', input_text)
                 if match:
                     next_word = match.group(1)
-
                 for packaging in packaging_matches:
-                    if not is_singular(packaging):
+                    if is_singular(packaging):
                         continue
                     if f"quantity_{packaging}" in packaging_quantities:
                         packaging_contents[f"{packaging}_contain"] = f"{quantity_contents} {next_word}"
 
         if f"quantity_{packaging}" in packaging_quantities:
             quantity_value, packaging = quantity
-
             packaging_quantities[f"quantity_{packaging}"] = str(quantity_value)
 
     for key, value in packaging_quantities.items():
 
-        if value == 0:
+        if value == str(0):
             packaging_quantities[key] = "information missing"
 
     # Check for misidentified packaging_contents keys
@@ -135,14 +137,15 @@ def extract_entities(input_text):
 
     # Check if sentences imply that cargo is hazardous
     sentences = re.split(r'(?<=[.!?]) +', input_text)
-
+    hazardous = False
     for sentence in sentences:
 
         if is_hazardous(sentence):
             hazardous = True
+        elif hazardous:
+            continue
         else:
             hazardous = False
-
 
     # Combine entities into dictionary
     entities = {
@@ -153,7 +156,6 @@ def extract_entities(input_text):
         "Weight": weight_matches,
         "Hazardous properties": hazardous
     }
-
     # Check if any entities have value None or empty assigned
     for key, value in entities.items():
         if value is None or (isinstance(value, list) and not value):
@@ -164,15 +166,118 @@ def extract_entities(input_text):
 for input_text in inputs:
     entities = extract_entities(input_text)
 
+all_entities = []
 for i, input_text in enumerate(inputs):
     entities = extract_entities(input_text)
     relevance_cargo = check_for_relevance(entities, input_text)
     filter1 = remove_singular_quantities(relevance_cargo)
     filter2 = remove_plural_weights(filter1)
     result = add_missing_weights(filter2)
+    all_entities.append(result)
 
     print("------------------------------------------------------------------------------")
     print(f"Input text ({i+1}) = {input_text}")
     print(" ")
     print(f"Entities extracted = {result}")
     print("------------------------------------------------------------------------------")
+
+data = {
+    'Input Text': inputs,  # Ensure this matches the length of all_entities
+    'Cargo': [', '.join(ent.get('Cargo', [])) for ent in all_entities],
+    'Packaging': [', '.join(ent.get('Packaging', [])) for ent in all_entities],
+    'Quantity': [],
+    'Containment': [],
+    'Weight': [],
+    'Hazardous Properties': [ent.get('Hazardous properties', False) for ent in all_entities],
+    'True Positives (TP)': '',  # Empty for manual entry
+    'False Positives (FP)': '',  # Empty for manual entry
+    'False Negatives (FN)': ''  # Empty for manual entry
+}
+
+for ent in all_entities:
+    quantity_details = ', '.join(f"{key}: {value}" for key, value in ent.items() if 'quantity_' in key)
+    data['Quantity'].append(quantity_details)
+
+    containment_details = ', '.join(f"{key}: {value}" for key, value in ent.items() if
+                                    key.endswith('_contain'))
+    data['Containment'].append(containment_details)
+
+    # Extracting weights dynamically
+    weight_get = [', '.join(ent.get('Weight', [])) for ent in all_entities]
+    weight_details = ', '.join(f"{key}: {value}" for key, value in ent.get('Weight').items() if
+                               key.startswith('weight_per_'))
+    data['Weight'].append(weight_details)
+
+timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+df = pd.DataFrame(data)
+
+
+csv_filename = f'./data/Entities_Extracted - {timestamp}.csv'
+df.to_csv(csv_filename, index=False)
+
+df, csv_filename
+
+excel_writer = pd.ExcelWriter(f'Entities_Extracted - {timestamp}.xlsx', engine='xlsxwriter')
+
+df.to_excel(excel_writer, sheet_name='experiment1', index=False)
+
+workbook  = excel_writer.book
+worksheet = excel_writer.sheets['experiment1']
+
+header_format = workbook.add_format({
+    'bold': True,
+    'text_wrap': True,
+    'valign': 'top',
+    'fg_color': '#D7E4BC',
+    'border': 1
+})
+
+body_format = workbook.add_format({
+    'text_wrap': True,
+    'valign': 'top',
+    'border': 1,
+    'indent': 1
+})
+
+border_format = workbook.add_format({
+    'border': 1,
+    'border_color': 'black',
+    'fg_color': '#d5d7e3',
+    'align': 'center',
+    'valign': 'vcenter',
+    'font_size': 14
+})
+
+
+for col_num, value in enumerate(df.columns.values):
+    worksheet.write(0, col_num, value, header_format)
+
+
+for row_num, data in enumerate(df.values, 1):
+    for col_num, value in enumerate(data):
+        worksheet.write(row_num, col_num, value, body_format)
+
+
+for row_num, data in enumerate(df.values, 1):
+    for col_num, value in enumerate(data):
+
+        worksheet.write(row_num, col_num, value, body_format)
+
+        if col_num in (7, 8, 9):
+            worksheet.write(row_num, col_num, value, border_format)
+
+
+worksheet.set_column('A:A', 60)
+worksheet.set_column('B:B', 13)
+worksheet.set_column('C:C', 13)
+worksheet.set_column('D:D', 23)
+worksheet.set_column('E:E', 23)
+worksheet.set_column('F:F', 23)
+worksheet.set_column('G:G', 10)
+worksheet.set_column('H:H', 8.5)
+worksheet.set_column('I:I', 8.5)
+worksheet.set_column('J:J', 8.5)
+
+worksheet.freeze_panes(1, 0)
+
+excel_writer.close()

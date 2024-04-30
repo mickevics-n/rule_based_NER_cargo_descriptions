@@ -8,10 +8,12 @@ To run this project, you will need Python 3.8 or higher and the following Python
 - `re` for regular expressions
 - `nltk` for natural language processing
 - `word2number` for converting words to numbers
+- `xlsxwriter` for generating xlsx report
+- `pandas` for generating xlsx report
 
 You can install the necessary dependencies via pip:
 ```bash
-pip install nltk word2number
+pip install nltk word2number xlsxwriter pandas
 ```
 
 ## Usage
@@ -27,8 +29,7 @@ description_examples = [
     "Fifteen plastic pallets of medical supplies, each weighing 900 kilograms. The supplies include bandages, syringes, and medications. All items are packed in boxes weighing 5 pounds each.”,
     ]
 
-cargo_types = [
-    "olive oil",
+cargo_types = "olive oil",
     "apples",
     "ceramic pottery",
     "spirits",
@@ -43,6 +44,9 @@ cargo_types = [
     "automobile parts",
     "engine components",
     "electronics",
+    "industrial glue",
+    "hazardous waste",
+    "electronic components",
     "furniture",
     "plastics",
     "medical supplies",
@@ -55,6 +59,8 @@ cargo_types = [
     "alcoholic beverages",
     "glassware",
     "toys",
+    "oxygen",
+    "coffee beans",
     "agricultural products",
     "luxury goods",
     "stationery",
@@ -63,6 +69,7 @@ cargo_types = [
     "household goods",
     "food products",
     "perfumes",
+    "perfume",
     "clothing",
     "jewelry",
     "musical instruments",
@@ -77,6 +84,7 @@ packaging_types = [
     "cans",
     "vials",
     "packs",
+    "buckets",
     "sacks",
     "tanks",
     "cases",
@@ -84,6 +92,7 @@ packaging_types = [
     "crates",
     "casks",
     "totes",
+    "envelopes",
     "barrels",
     "jugs",
     "flasks",
@@ -178,4 +187,8 @@ When the `extract_entities.py` script is executed with a specific text input, th
     'Hazardous properties': False
 }
 ```
+
+**Output in Excel:**
+
+For each `extract_entities.py` an Excel file is generated in the project's folder with a name `Entities_Extracted - {timestamp}.xlsx`. Each code run will result in generation of a unique filename.
 
