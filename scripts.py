@@ -8,9 +8,9 @@ from nltk.tokenize import word_tokenize
 from knowlege_base import packaging_plural
 
 # Comment lines when downloaded
-#nltk.download('wordnet')
-#nltk.download('averaged_perceptron_tagger')
-#nltk.download('punkt')
+nltk.download('wordnet')
+nltk.download('averaged_perceptron_tagger')
+nltk.download('punkt')
 
 def compose_packaging_pattern(packaging_plural):
     """
