@@ -5,7 +5,7 @@ from datetime import datetime
 
 from scripts import word_to_num, add_commas, compose_packaging_pattern, extract_quantities, extract_weight_in_kg, \
     is_singular, is_hazardous, check_for_relevance, remove_singular_quantities, remove_plural_weights, \
-    add_missing_weights
+    add_missing_weights, normalize_numbers_in_sentence, convert_numerical_words_to_numbers
 
 from knowlege_base import cargo_items, packaging_plural
 
@@ -68,24 +68,23 @@ def extract_entities(input_text):
         dict: An updated dictionary where all duplicate values are removed, each unique value is retained under one of
         its original keys, and missing information is addressed.
     """
-    # Convert number words to numeric values
-    input_text = ' '.join(
-        [str(word_to_num(word)) if word_to_num(word) is not None else word for word in input_text.split()])
+    n_input_text = normalize_numbers_in_sentence(input_text)
+
+    # Convert number words to numeric values and remove all remaining hyphens ('-')
+    num_input_text = convert_numerical_words_to_numbers(n_input_text)
 
     # Add comas to a text to separate quantities
-    input_text = add_commas(input_text)
+    c_input_text = add_commas(num_input_text)
 
     # Extract cargo_matches using patterns
     cargo_pattern = r"(" + "|".join(cargo_items) + ")"
-    cargo_matches = re.findall(cargo_pattern, input_text)
+    cargo_matches = re.findall(cargo_pattern, c_input_text)
 
     # Extract quantity_matches using patterns
     packaging_pattern, _ = compose_packaging_pattern(packaging_plural)
-    packaging_matches = re.findall(packaging_pattern, input_text)
-    quantity_matches = extract_quantities(input_text)
+    packaging_matches = re.findall(packaging_pattern, c_input_text)
 
-    # Extract weight_matches using patterns
-    weight_matches = extract_weight_in_kg(input_text)
+    quantity_matches = extract_quantities(c_input_text)
 
     # Create separate categories for each type of packaging
     packaging_contents = {}
@@ -98,20 +97,20 @@ def extract_entities(input_text):
     for quantity, packaging in zip(quantity_matches, packaging_matches):
 
         # Iterate over matches in the input text, to find additional context
-        for match in re.finditer(r'\b(?:with|containing|holding|contains|capacity|hold)\b\s+(\d+)\s+(?:'
+        for match in re.finditer(r'\b(?:with|containing|holding|contains|capacity|hold|holds|with a capacity of|includes)\b\s+(\d+)\s+(?:'
                                  + weight_units_pattern + r'\b)?\s*(' + '|'.join(packaging_matches) + r')?',
-                                 input_text):
+                                 num_input_text):
 
             if re.search(weight_units_pattern, match.group(0)):
                 #print("weight_units_pattern found... aborting")
                 continue
 
             elif re.search(r'\b(\d+)\b', match.group(0)):
-                print("weight_units_pattern not found... continue")
+                #print("weight_units_pattern not found... continue")
                 phrase = match.group(0)
 
                 quantity_contents = re.search(r'\b(\d+)\b', phrase).group(0)
-                match = re.search(rf'\b{re.escape(quantity_contents)}\s+(\w+)', input_text)
+                match = re.search(rf'\b{re.escape(quantity_contents)}\s+(\w+)', num_input_text)
                 if match:
                     next_word = match.group(1)
                 for packaging in packaging_matches:
@@ -129,6 +128,10 @@ def extract_entities(input_text):
         if value == str(0):
             packaging_quantities[key] = "information missing"
 
+    # Extract weight_matches using patterns
+    weight_matches = extract_weight_in_kg(num_input_text, packaging_quantities)
+
+
     # Check for misidentified packaging_contents keys
     keys_to_delete = [key for key, value in packaging_contents.items() if
                       isinstance(value, (int, float)) and value == 0 and not isinstance(value, bool)]
@@ -136,7 +139,7 @@ def extract_entities(input_text):
         del packaging_contents[key]
 
     # Check if sentences imply that cargo is hazardous
-    sentences = re.split(r'(?<=[.!?]) +', input_text)
+    sentences = re.split(r'(?<=[.!?]) +', num_input_text)
     hazardous = False
     for sentence in sentences:
 
@@ -186,7 +189,7 @@ data = {
     'Cargo': [', '.join(ent.get('Cargo', [])) for ent in all_entities],
     'Packaging': [', '.join(ent.get('Packaging', [])) for ent in all_entities],
     'Quantity': [],
-    'Containment': [],
+    'Contents': [],
     'Weight': [],
     'Hazardous Properties': [ent.get('Hazardous properties', False) for ent in all_entities],
     'True Positives (TP)': '',  # Empty for manual entry
@@ -200,7 +203,7 @@ for ent in all_entities:
 
     containment_details = ', '.join(f"{key}: {value}" for key, value in ent.items() if
                                     key.endswith('_contain'))
-    data['Containment'].append(containment_details)
+    data['Contents'].append(containment_details)
 
     # Extracting weights dynamically
     weight_get = [', '.join(ent.get('Weight', [])) for ent in all_entities]
@@ -219,10 +222,10 @@ df, csv_filename
 
 excel_writer = pd.ExcelWriter(f'Entities_Extracted - {timestamp}.xlsx', engine='xlsxwriter')
 
-df.to_excel(excel_writer, sheet_name='experiment1', index=False)
+df.to_excel(excel_writer, sheet_name='experiment', index=False)
 
 workbook  = excel_writer.book
-worksheet = excel_writer.sheets['experiment1']
+worksheet = excel_writer.sheets['experiment']
 
 header_format = workbook.add_format({
     'bold': True,
@@ -236,7 +239,8 @@ body_format = workbook.add_format({
     'text_wrap': True,
     'valign': 'top',
     'border': 1,
-    'indent': 1
+    'indent': 1,
+    'num_format': '0.00'
 })
 
 border_format = workbook.add_format({
@@ -277,6 +281,24 @@ worksheet.set_column('G:G', 10)
 worksheet.set_column('H:H', 8.5)
 worksheet.set_column('I:I', 8.5)
 worksheet.set_column('J:J', 8.5)
+
+worksheet.set_row(26, 35)
+worksheet.set_row(27, 18)
+
+
+worksheet.write('H28', '=SUM(H2:H26)', border_format)
+worksheet.write('I28', '=SUM(I2:I26)', border_format)
+worksheet.write('J28', '=SUM(J2:J26)', border_format)
+
+bold_format = workbook.add_format({'bold': True, 'border': 1})
+worksheet.write('A28', 'Results:', bold_format)
+worksheet.write('A29', 'Precision (%)', body_format)
+worksheet.write('A30', 'Recall (%)', body_format)
+worksheet.write('A31', 'F1-Score (%)', body_format)
+
+worksheet.write('B29', '=H28/(I28+H28)', body_format)
+worksheet.write('B30', '=H28/(J28+H28)', body_format)
+worksheet.write('B31', '=2*(B30*B29)/(B30+B29)', body_format)
 
 worksheet.freeze_panes(1, 0)
 

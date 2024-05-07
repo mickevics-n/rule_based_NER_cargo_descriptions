@@ -147,6 +147,7 @@ def extract_quantities(input_text):
 
         pattern = r"\b(\d+)\s+(?:\w+\s+)?(?:\w+\s+)?" + re.escape(package)
         matches = re.findall(pattern, input_text)
+
         if matches:
             quantity_matches.extend([(match, package) for match in matches])
         else:
@@ -178,7 +179,111 @@ def convert_to_kg(weight, unit):
     else:
         raise ValueError("Invalid unit. Unit matched different from 'kg', 'kilograms', 'tonnes', 'pounds', or 'grams'.")
 
-def extract_weight_in_kg(input_text):
+def count_words_until_match_left(pakaging, full_weight, input_text):
+    """
+    Counts words in between pakaging and full_weight in input_text.
+
+    Args:
+        pakaging (str): a string containing packaging info.
+        full_weight (str) a string containing weight + unit info.
+        input_text (str) a string containing a description of cargo, including details about weight and packaging.
+
+    Returns:
+        int: count
+    """
+    start_index = input_text.find(full_weight)
+    substring_before_weight = input_text[:start_index]
+    reversed_substring = substring_before_weight[::-1]
+    words = reversed_substring.split()
+    count = 0
+    reversed_case = pakaging[::-1]
+    for word in words:
+        if reversed_case in word:
+            break
+        count += 1
+
+    return count
+
+def filter_data_by_recognised(data, recognised_weights):
+    """
+    Filters recognised weight values based on values calculated in count_words_until_match_left function.
+
+    Args:
+        data (dict): A dictionary containing information containing recognised weight(s), unit, and assigned score. e.g:
+        data = {
+                    'cases': [['15', 'kilograms', 10], []]
+                    'boxes': [['15', 'kilograms', 3]], []]
+                    'case': [['15', 'kilograms', 1]], []]
+                    'box': [['15', 'kilograms', 3], ['14', 'pounds', 1]]
+                }
+        recognised_weights (list) A list containing tuples with recognised weight and unit for reference. e.g:
+        recognised_weights =
+        [('15', 'kilograms'), ('14', 'pounds')]
+
+    Returns:
+        dict: Sorted dictionary with lowest scores. e.g:
+        data = {
+                    'case': [['15', 'kilograms', 1]]
+                    'box': [['14', 'pounds', 1]]
+                }
+    """
+
+    min_values = {weight_unit: float('inf') for weight_unit in recognised_weights}
+
+    keys_to_remove = [key for key, value in data.items() if not any(value)]
+
+    for key in keys_to_remove:
+        del data[key]
+
+    for value_lists in data.values():
+        for sublist in value_lists:
+            if len(sublist) == 3 and tuple(sublist[:2]) in recognised_weights:
+                current_weight_unit = tuple(sublist[:2])
+                current_value = sublist[2]
+                if current_value < min_values[current_weight_unit]:
+                    min_values[current_weight_unit] = current_value
+            elif len(sublist) == 4 and (sublist[0], sublist[2]) in recognised_weights:
+                current_weight_unit = (sublist[0], sublist[2])
+                current_value = sublist[3]
+                if current_value < min_values[current_weight_unit]:
+                    min_values[current_weight_unit] = current_value
+
+    new_data = {}
+    for key, value_lists in data.items():
+        for sublists in value_lists:
+
+            if len(sublists) == 3:
+                filtered_lists = [
+                    sublist[:2]
+                    for sublist in value_lists
+                    if len(sublist) == 3 and tuple(sublist[:2]) in recognised_weights and sublist[2] == min_values[
+                        tuple(sublist[:2])]
+                ]
+            elif len(sublists) == 4:
+
+                filtered_lists_pop = [
+                    sublist[:3]
+                    for sublist in value_lists
+                    if len(sublist) == 4 and
+                       (sublist[0], sublist[2]) in recognised_weights and
+                       sublist[3] == min_values[(sublist[0], sublist[2])]
+                ]
+                filtered_lists = [
+                    [sublist[1], sublist[2]]
+                    for sublist in filtered_lists_pop
+                ]
+            elif len(sublists) == 0:
+                continue
+
+        if len(filtered_lists) == 1:
+            new_data[key] = filtered_lists[0]
+        elif len(filtered_lists) > 1:
+            unique_items = dict.fromkeys(item for sublist in filtered_lists for item in sublist).keys()
+            new_data[key] = list(unique_items)
+
+    return new_data
+
+def extract_weight_in_kg(input_text, packaging_quantities):
     """
     Extracts weight measurements from a given input_text that describes cargo, and converts these weights into kilograms
     where necessary with convert_to_kg(weight, unit) function.
@@ -196,9 +301,10 @@ def extract_weight_in_kg(input_text):
 
     packaging_matches = re.findall(packaging_pattern, input_text)
 
-    weight_pattern = r"(\d+(?:\.\d+)?)\s*(kg|kilograms|tonnes|pounds|tonne|kilogram|pound|gram|grams)"
+    weight_pattern = r"\b(\d{1,3}(?:,\d{3})*\.\d+|\d{1,3}(?:,\d{3})*|\d+\.\d+|\d+)\s*(kg|kilograms|tonnes|pounds|tonne|kilogram|pound|gram|grams)\b"
+    weight_units_pattern = r'(?:kg|kilograms|tonnes|pounds|tonne|kilogram|pound|grams|gram)'
 
-    weights = re.findall(weight_pattern, input_text)
+    weights_sentence = re.findall(weight_pattern, input_text)
 
     weight_per_package = {package: [] for package in packaging_matches}
 
@@ -207,20 +313,84 @@ def extract_weight_in_kg(input_text):
     list_units = []
     for sentence in sentences:
 
-        for weight, unit in weights:
-            list_weights.append(weight)
-            list_units.append(unit)
+        for weight, unit in weights_sentence:
+
             if weight in sentence:
+
                 for package in packaging_matches:
-
+                    inner_weights = []
+                    weight_per_package[package].append(inner_weights)
                     if package in sentence:
+                        pattern = r'\b(?:with a total weight of|total of|total of|total weight is|total weight|Total weight is) (\d{1,3}(?:,\d{3})*\.\d+|\d{1,3}(?:,\d{3})*|\d+\.\d+|\d+) (' + weight_units_pattern + r')\b'
+                        matches = list(re.finditer(pattern, input_text, re.IGNORECASE))
 
-                        weight_per_package[package].append(float(weight))
-                        weight_per_package[package].append(unit)
-    print(weight_per_package)
+                        if 'each' in sentence or 'Each' in sentence:
+                            inner_weights.append(weight)
+                            inner_weights.append(unit)
+                            joined_weights = ' '.join([weight, unit])
+                            count = count_words_until_match_left(package, joined_weights, input_text)
+                            inner_weights.append(count)
+                            list_weights.append(weight)
+                            list_units.append(unit)
+
+                        elif not matches:
+
+                            inner_weights.append(weight)
+                            inner_weights.append(unit)
+                            joined_weights = ' '.join([weight, unit])
+                            count = count_words_until_match_left(package, joined_weights, input_text)
+                            inner_weights.append(count)
+                            list_weights.append(weight)
+                            list_units.append(unit)
+
+                        elif matches:
+
+                            for match in matches:
+                                for key in packaging_quantities:
+                                    if package in key:
+                                        value = packaging_quantities[key]
+                                        joined_weights = ' '.join([weight, unit])
+                                        count = count_words_until_match_left(package, joined_weights, input_text)
+                                        if value == 0 or value == 'information missing':
+                                            continue
+                                        else:
+                                            inner_weights.append(weight)
+                                            inner_weights.append(float(float(weight) / float(value)))
+                                            inner_weights.append(unit)
+                                            inner_weights.append(count)
+                                            list_weights.append(float(float(weight) / float(value)))
+                                            list_units.append(unit)
+                                    else:
+                                        continue
+
+                        else:
+                            continue
+
+                    else:
+                        pattern = r'\b(?:total of|total weight is|total weight|Total weight is) (\d{1,3}(?:,\d{3})*\.\d+|\d{1,3}(?:,\d{3})*|\d+\.\d+|\d+) (' + weight_units_pattern + r')\b'
+                        matches = list(re.finditer(pattern, input_text, re.IGNORECASE))
+                        for match in matches:
+                            for key in packaging_quantities:
+
+                                value = packaging_quantities[key]
+                                if value == 0 or value == 'information missing':
+                                    continue
+                                joined_weights = ' '.join([weight, unit])
+                                count = count_words_until_match_left(package, joined_weights, input_text)
+                                inner_weights.append(weight)
+                                inner_weights.append(float(float(weight) / float(value)))
+                                inner_weights.append(unit)
+                                inner_weights.append(count)
+                                list_weights.append(float(float(weight) / float(value)))
+                                list_units.append(unit)
+            else:
+                continue
+
+    weight_per_package_filtered = filter_data_by_recognised(weight_per_package, weights_sentence)
+
     result = {}
 
-    for package, weights in weight_per_package.items():
+    for package, weights in weight_per_package_filtered.items():
 
         word = to_singular(package)
         variable_name = f"weight_per_{word}"
@@ -261,6 +431,7 @@ def add_commas(input_text):
     return modified_text
 
 
+
 def word_to_num(word):
     """
     Converts numerical words to their corresponding integer representations. This function takes a single word as input
@@ -280,6 +451,103 @@ def word_to_num(word):
     except ValueError:
         return None
 
+def normalize_numbers_in_sentence(sentence):
+    """
+    Parses through a sentence and normalizes numbers expressed in words by combining consecutive numerical words with
+    hyphens, including handling connector words like 'and' when they appear between numerical words.
+
+    Args:
+        sentence (str): The input sentence containing numerical words.
+
+    Returns:
+        str: A modified sentence where consecutive numerical words and certain connectors are joined by hyphens.
+    """
+    words = sentence.split()
+    normalized_sentence = []
+    current_number = []
+
+    for word in words:
+        if word == 'and' and current_number:
+
+            try:
+                next_index = words.index(word) + 1
+                if next_index < len(words):
+                    w2n.word_to_num(words[next_index])
+                    current_number.append(word)
+            except (ValueError, IndexError):
+
+                if current_number:
+                    normalized_sentence.append('-'.join(current_number))
+                    current_number = []
+                normalized_sentence.append(word)
+        else:
+
+            try:
+                w2n.word_to_num(word)
+                current_number.append(word)
+            except ValueError:
+
+                if current_number:
+                    normalized_sentence.append('-'.join(current_number))
+                    current_number = []
+                normalized_sentence.append(word)
+
+    if current_number:
+        normalized_sentence.append('-'.join(current_number))
+
+    return ' '.join(normalized_sentence)
+
+def convert_numerical_words_to_numbers(input_text):
+    """
+    Converts all recognizable numerical words in a given text to their numeric equivalents. Also, checks if hyphen-separated
+    words are all numerical before preserving the hyphen; otherwise, the hyphen is removed.
+
+    Args:
+        text (str): The input text containing potential numerical words.
+
+    Returns:
+        str: A new string where all numerical words have been replaced by their numeric equivalents and inappropriate hyphens are removed.
+    """
+    norm = normalize_numbers_in_sentence(input_text)
+    words = norm.split(' ')
+
+    processed_words = []
+
+    for word in words:
+
+        if '-' in word:
+            subwords = word.split('-')
+
+            if all(word_to_num(sub) is not None or sub == 'and' for sub in subwords):
+                processed_word = '-'.join(str(sub) for sub in subwords)
+            else:
+                processed_words.extend(subwords)
+            processed_words.append(processed_word)
+        else:
+            pattern = r"\b(\d{1,3}(?:,\d{3})*\.\d+|\d{1,3}(?:,\d{3})*|\d+\.\d+|\d+)\b"
+            matches = re.findall(pattern, word)
+            if matches:
+                if ',' in word:
+                    processed_word = word.replace(',', '')
+
+                    processed_words.append(processed_word)
+                elif '.' in word:
+                    processed_word = str(word_to_num(word)) if word_to_num(word) is not None else word
+                    processed_words.append(processed_word)
+                else:
+                    processed_word = str(word_to_num(word)) if word_to_num(word) is not None else word
+                    processed_words.append(processed_word)
+            else:
+
+                processed_word = str(word_to_num(word)) if word_to_num(word) is not None else word
+                processed_words.append(processed_word)
+
+
+
+    num_converted_text = ' '.join(
+        [str(word_to_num(word)) if word_to_num(word) is not None else word for word in processed_words])
+
+    return num_converted_text
 
 def is_hazardous(sentence):
     """
@@ -301,7 +569,7 @@ def is_hazardous(sentence):
 
     tokens = word_tokenize(sentence)
 
-    negations = set(['not', 'no', 'n\'t', 'never', 'none'])
+    negations = set(['not', 'no', 'n\'t', 'never', 'none', 'non'])
     negation_flag = False
     for token in tokens:
         if token.lower() in negations:
@@ -353,28 +621,35 @@ def check_for_relevance(entities, input_text):
 
     relevancy_scores = {cargo: 0 for cargo in cargo_type}
 
-    for cargo, weight, packaging in zip(cargo_type, weight_type, packaging_type):
+    for sentence in sentences:
 
-        for sentence in sentences:
+        for cargo in cargo_type:
 
-            if cargo in sentence:
+                if cargo in sentence:
 
-                entity_count = {str(entity): sentence.count(str(entity)) for entity in allentity_list}
+                    entity_count = {str(entity): sentence.count(str(entity)) for entity in allentity_list}
 
-                relevancy_scores[cargo] += sum(entity_count.values())
-
-                if weight in sentence:
-                    entity_count = {str(weight): sentence.count(str(weight))}
                     relevancy_scores[cargo] += sum(entity_count.values())
 
-                elif packaging in sentence:
-                    #print(packaging)
-                    entity_count = {str(packaging): sentence.count(str(packaging))}
-                    relevancy_scores[cargo] += sum(entity_count.values())
+                    for weight in weight_type:
 
-                else:
-                    pass
-                    #print(f"No relevant information found in {sentence}")
+                        if weight in sentence:
+                            entity_count = {str(weight): sentence.count(str(weight))}
+                            relevancy_scores[cargo] += sum(entity_count.values())
+                        else:
+                            pass
+
+                    for packaging in packaging_type:
+
+                        if packaging in sentence:
+                            entity_count = {str(packaging): sentence.count(str(packaging))}
+                            relevancy_scores[cargo] += sum(entity_count.values())
+                        else:
+                            pass
+
+                    else:
+                        pass
+                        #print(f"No relevant information found in {sentence}")
 
     for cargo, score in relevancy_scores.items():
         if score == 0:
@@ -441,11 +716,11 @@ def to_singular(word):
     Returns:
         str: The singular form of the word.
     """
-    # Check if the word is already singular
+
     if is_singular(word):
         return word
 
-    # Define exceptions for specific words
+    # Exceptions for specific words
     exceptions = {
         'pallets': 'pallet',
         'Pallets': 'Pallet',
@@ -477,11 +752,9 @@ def to_singular(word):
         'Packet': 'Packet',
     }
 
-    # Check for exceptions
     if word in exceptions:
         return exceptions[word]
 
-    # Use WordNet for regular conversion
     synsets = wordnet.synsets(word)
     if synsets:
         for synset in synsets:
@@ -517,29 +790,29 @@ def clean_entities_based_on_text(input_text, entities):
     keys_to_delete = []
 
     for key, value in entities.items():
-        if '_contain' in key:  # Check if the key is a '{packaging}_contain' key
-            packaging = key.split('_contain')[0]  # Get the packaging type from the key
+        if '_contain' in key:
+            packaging = key.split('_contain')[0]
             content_present = False
 
             for sentence in sentences:
-                # Find all positions of the packaging and the content in the sentence
+
                 packaging_positions = [m.start() for m in re.finditer(packaging, sentence)]
                 content_position = sentence.find(str(value))
 
-                if len(packaging_positions) > 1:  # If there are multiple instances of packaging
-                    # Check if content is before the first packaging
+                if len(packaging_positions) > 1:
+
                     if content_position < packaging_positions[0] and content_position != -1:
                         content_present = True
-                elif len(packaging_positions) == 1:  # Only one instance of packaging
+                elif len(packaging_positions) == 1:
                     if packaging in sentence and str(value) in sentence:
-                        # Ensure content and packaging are in close proximity
+
                         if abs(content_position - packaging_positions[0]) < len(sentence):
                             content_present = True
 
             if not content_present:
                 keys_to_delete.append(key)
 
-    # Delete the keys where the packaging and its content are not in the same sentence
+
     for key in keys_to_delete:
         del entities[key]
 
