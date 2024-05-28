@@ -1,0 +1,24 @@
+﻿Package_type_code,Group,Description,Min_weight_kg,Max_weight_kg,Min_volume_m3,Max_volume_m3
+31,"Rigid, Drum-type, (cylindrical)",Very small,0.01,1,0.0005,0.001
+32,"Rigid, Drum-type, (cylindrical)",Small,0.1,5,0.001,0.001
+41,"Rigid, Bulb-type, (spherical)",Very small,0.01,1,0.0005,0.001
+42,"Rigid, Bulb-type, (spherical)",Small,0.5,3,0.0005,0.003
+43,"Rigid, Bulb-type, (spherical)",Medium,5,50,0.1,0.5
+44,"Rigid, Bulb-type, (spherical)",Large,300,500,0.5,1
+91,OTHER special packages ,Cylinder with rims on which goods are wound,1,5,0.001,0.005
+61,"Flexible, bag-type",Very small,0.05,1,0.0005,0.001
+62,"Flexible, bag-type",Small,1,5,0.001,0.01
+65,"Flexible, bag-type",Very large,300,1000,0.5,1
+27,"Rigid, box-type, (prismatic)",Incopleate on top,25,50,0.02,0.1
+25,"Rigid, box-type, (prismatic)",Very large,300,1000,0.3,1.5
+23,"Rigid, box-type, (prismatic)",Medium ,5,50,0.01,0.25
+51,"Rigid, other","Cone, truncated, normally with handle",3,10,0.005,0.05
+22,"Rigid, box-type, (prismatic)",Small,1,5,0.001,0.01
+21,"Rigid, box-type, (prismatic)",Very small ,0.1,0.5,0.0002,0.001
+24,"Rigid, box-type, (prismatic)",Large,50,300,0.5,1
+34,"Rigid, Drum-type, (cylindrical)",Large,50,300,0.5,1
+33,"Rigid, Drum-type, (cylindrical)",Medium,5,50,0.1,0.5
+35,"Rigid, Drum-type, (cylindrical)",Very large,300,1000,0.5,1
+25,"Rigid, box-type, (prismatic)",Very large,300,1000,0.5,1
+29,"Rigid, box-type, (prismatic)",Incopleate on top with internal divisions,1,20,0.05,0.1
+92,OTHER special packages ,N/A,1100,1500,2,4

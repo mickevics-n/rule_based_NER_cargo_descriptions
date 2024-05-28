@@ -1,0 +1,13 @@
+﻿Packaging type,Packaging Type,Description,Level_of_packaging,Package_type_code,comparable_primary
+BX,boxes,corrugated boxes,S,24,"AM, AT, BG, BB, BX, BJ, CA, JR"
+BX,boxes,rigid boxes,S,24,"AM, AT, BG, BB, BX, BJ, CA, JR"
+BX,boxes,slotted boxes,S,24,"AM, AT, BG, BB, BX, BJ, CA, JR"
+BX,boxes,plastic boxes,S,24,"AM, AT, BG, BB, BX, BJ, CA, JR"
+BX,boxes,wooden boxes,S,25,"BB, BX, BJ, CI"
+BX,boxes,large wooden boxes,S,25,"BB, BX, BJ, CI"
+BC,crates,plastic bottle crates,S,29,BO
+BC,crates,metal bottle crates,S,29,BO
+BC,crates,wooden bottle crates,S,29,BO
+BC,crates,foldable bottle crates,S,29,BO
+BC,crates,stackable bottle crates,S,29,BO
+OI,pallets,pallets,T,92,OI

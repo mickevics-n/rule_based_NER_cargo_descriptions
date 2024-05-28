@@ -9,6 +9,7 @@ from knowlege_base import packaging_plural
 
 # Comment lines when downloaded
 nltk.download('wordnet')
+nltk.download('omw-1.4')
 nltk.download('averaged_perceptron_tagger')
 nltk.download('punkt')
 
@@ -393,6 +394,7 @@ def extract_weight_in_kg(input_text, packaging_quantities):
     for package, weights in weight_per_package_filtered.items():
 
         word = to_singular(package)
+
         variable_name = f"weight_per_{word}"
 
         if len(weights) >= 2:
@@ -408,6 +410,8 @@ def extract_weight_in_kg(input_text, packaging_quantities):
     if len(result) == 1 and (weight_per_package) and len(unique_weights_list) == 1 and len(unique_units_list) == 1:
         weight = convert_to_kg(unique_weights_list[0], unique_units_list[0])
         result[variable_name] = weight
+
+
 
     return result
 
@@ -706,6 +710,14 @@ def remove_plural_weights(entities):
                 del weight_info[key]
     return entities
 
+def singularize_word(word):
+    synsets = wordnet.synsets(word)
+    if synsets:
+        for synset in synsets:
+            for lemma in synset.lemmas():
+                if lemma.name() != word:
+                    return lemma.name()
+    return word
 def to_singular(word):
     """
     Convert a plural word to its singular form using NLTK's WordNet.
@@ -718,6 +730,7 @@ def to_singular(word):
     """
 
     if is_singular(word):
+        print(word)
         return word
 
     # Exceptions for specific words
@@ -755,13 +768,17 @@ def to_singular(word):
     if word in exceptions:
         return exceptions[word]
 
-    synsets = wordnet.synsets(word)
-    if synsets:
-        for synset in synsets:
-            for lemma in synset.lemmas():
-                if lemma.name() != word:
-                    return lemma.name()
-    return word
+    words = nltk.word_tokenize(word)
+    pos_tags = nltk.pos_tag(words)
+    singular_words = []
+
+    for word, pos in pos_tags:
+        if pos.startswith('JJ'):  # If the word is an adjective
+            singular_words.append(word)
+        else:
+            singular_words.append(singularize_word(word))
+
+    return ' '.join(singular_words)
 
 def add_missing_weights(entities):
 

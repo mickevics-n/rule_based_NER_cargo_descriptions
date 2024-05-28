@@ -112,11 +112,22 @@ def extract_entities(input_text):
                 quantity_contents = re.search(r'\b(\d+)\b', phrase).group(0)
                 match = re.search(rf'\b{re.escape(quantity_contents)}\s+(\w+)', num_input_text)
                 if match:
-                    next_word = match.group(1)
+                    for packaging in packaging_matches:
+                        if is_singular(packaging):
+                            continue
+
+                        if match.group(1) == packaging.split()[0]:
+                            print(packaging)
+                            next_word = packaging
+                        else:
+                            next_word = match.group(1)
+
                 for packaging in packaging_matches:
                     if is_singular(packaging):
                         continue
-                    if f"quantity_{packaging}" in packaging_quantities:
+                    elif packaging == next_word:
+                        continue
+                    elif f"quantity_{packaging}" in packaging_quantities:
                         packaging_contents[f"{packaging}_contain"] = f"{quantity_contents} {next_word}"
 
         if f"quantity_{packaging}" in packaging_quantities:
